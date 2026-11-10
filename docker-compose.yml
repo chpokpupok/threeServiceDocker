@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: oop_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: oop_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database_script.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d oop_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build: ./backend/auth-service
+    container_name: auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_USER: postgres
+      DB_HOST: postgres
+      DB_DATABASE: oop_db
+      DB_PASSWORD: postgres
+      DB_PORT: 5432
+      secretKey: supersecret
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  coursework-service:
+    build: ./backend/coursework-service
+    container_name: coursework-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      DB_USER: postgres
+      DB_HOST: postgres
+      DB_DATABASE: oop_db
+      DB_PASSWORD: postgres
+      DB_PORT: 5432
+      secretKey: supersecret
+      AI_SERVICE_URL: http://ai-service:3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+
+  ai-service:
+    build: ./backend/ai-service
+    container_name: ai-service
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
+      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat}
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    depends_on: []
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+volumes:
+  pgdata:
