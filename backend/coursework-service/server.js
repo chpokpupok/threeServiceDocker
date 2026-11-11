@@ -23,7 +23,13 @@ const swaggerSpec = swaggerJsdoc({
       title: "Coursework Service API",
       version: "1.0.0",
       description: "Сервис курсовых работ"
-    }
+    },
+    servers: [
+          {
+            url: `http://localhost:${port}`,
+            description: "Локальный сервер"
+          }
+        ]
   },
   apis: ["./routes/*.js"]
 });

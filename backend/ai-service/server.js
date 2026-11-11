@@ -3,7 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
-const crypto = require("crypto"); // Для генерации RqUID (UUID)
+const crypto = require("crypto");
 
 const app = express();
 const port = process.env.PORT || 3003;
@@ -17,12 +17,21 @@ const swaggerSpec = swaggerJsdoc({
       title: "AI Service API (GigaChat)",
       version: "1.0.0",
       description: "Сервис генерации плана курсовой на базе GigaChat (Сбер)"
-    }
+    },
+    // Обязательный блок для работы кнопки "Try it out"
+    servers: [
+      {
+        url: `http://localhost:${port}`,
+        description: "Локальный сервер"
+      }
+    ]
   },
+  // Ищем комментарии в текущем файле (в server.js)
   apis: ["./server.js"]
 });
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 
 // --- Логика работы с GigaChat ---
 
@@ -30,7 +39,6 @@ let cachedToken = null;
 let tokenExpiresAt = 0;
 
 async function getGigaChatToken() {
-  // Если токен ещё жив (с запасом 1 минута), возвращаем его
   if (cachedToken && Date.now() < tokenExpiresAt - 60 * 1000) {
     return cachedToken;
   }
@@ -42,7 +50,6 @@ async function getGigaChatToken() {
     throw new Error("GIGACHAT_AUTH_KEY не задан в .env");
   }
 
-  // Генерируем уникальный RqUID для запроса
   const rquid = crypto.randomUUID();
 
   const params = new URLSearchParams();
@@ -54,7 +61,7 @@ async function getGigaChatToken() {
       "Content-Type": "application/x-www-form-urlencoded",
       "Accept": "application/json",
       "RqUID": rquid,
-      "Authorization": `Basic ${authKey}` // <-- Ключ авторизации, не Bearer!
+      "Authorization": `Basic ${authKey}`
     },
     body: params.toString()
   });
@@ -81,7 +88,7 @@ async function callGigaChat(topic) {
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "Authorization": `Bearer ${token}` // <-- Здесь уже Bearer с Access Token
+      "Authorization": `Bearer ${token}`
     },
     body: JSON.stringify({
       model: model,
@@ -99,7 +106,6 @@ async function callGigaChat(topic) {
     throw new Error(`Ошибка запроса к GigaChat: ${JSON.stringify(data)}`);
   }
 
-  // Достаём текст ответа из структуры GigaChat
   const answer = data.choices?.[0]?.message?.content;
   if (!answer) {
     throw new Error("Не удалось извлечь ответ из GigaChat");
@@ -110,22 +116,47 @@ async function callGigaChat(topic) {
 
 /**
  * @swagger
+ * tags:
+ *   name: AI
+ *   description: Генерация текста с помощью GigaChat
+ */
+
+/**
+ * @swagger
  * /generate-plan:
  *   post:
  *     summary: Сгенерировать план курсовой (GigaChat)
+ *     tags: [AI]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - topic
  *             properties:
  *               topic:
  *                 type: string
+ *                 description: Тема курсовой работы
+ *                 example: "Разработка веб-приложения на Node.js"
  *     responses:
  *       200:
- *         description: План сгенерирован
+ *         description: План успешно сгенерирован
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 plan:
+ *                   type: string
+ *                   description: Текст плана от нейросети
+ *       422:
+ *         description: Ошибка валидации (поле topic пустое)
+ *       502:
+ *         description: Ошибка на стороне GigaChat API (неверный токен, нет сети и т.д.)
  */
+
 app.post("/generate-plan", async (req, res) => {
   const { topic } = req.body;
 
@@ -151,4 +182,5 @@ app.get("/", (req, res) => {
 
 app.listen(port, () => {
   console.log(`AI service (GigaChat): http://localhost:${port}`);
+  console.log(`Swagger UI: http://localhost:${port}/api-docs`);
 });

@@ -20,7 +20,14 @@ const swaggerSpec = swaggerJsdoc({
       title: "Auth Service API",
       version: "1.0.0",
       description: "Сервис авторизации и регистрации"
-    }
+    },
+    servers: [
+          {
+            // Используем переменную port, чтобы адрес подставлялся автоматически
+            url: `http://localhost:${port}`,
+            description: "Локальный сервер разработки"
+          }
+        ]
   },
   apis: ["./routes/*.js"]
 });
